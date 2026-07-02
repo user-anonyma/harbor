@@ -1,0 +1,85 @@
+name: release
+
+# Builds Harbor for Windows in the cloud and publishes a GitHub Release with the
+# installer attached, so it can be downloaded directly (no Actions login needed).
+# Run it from the Actions tab via "Run workflow", or it is triggered via the API.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            harbor-core
+            src-tauri
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install JS deps
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Fetch libmpv
+        run: pnpm run setup:libmpv
+
+      - name: Fetch external binaries (yt-dlp, ffmpeg, ffprobe, mpv)
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p src-tauri/binaries
+          cd src-tauri/binaries
+          TARGET="x86_64-pc-windows-msvc"
+          curl -fL --retry 5 "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe" -o "yt-dlp-${TARGET}.exe"
+          curl -fL --retry 5 "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip" -o ffmpeg.zip
+          unzip -j ffmpeg.zip "*/bin/ffmpeg.exe" "*/bin/ffprobe.exe"
+          mv ffmpeg.exe "ffmpeg-${TARGET}.exe"
+          mv ffprobe.exe "ffprobe-${TARGET}.exe"
+          echo "Fetching standalone mpv.exe (bundled sidecar)..."
+          # Authenticated API call (avoids unauthenticated rate limits); grep -m1
+          # instead of |head so pipefail isn't tripped by SIGPIPE.
+          RESP=$(curl -s -H "Authorization: Bearer ${GITHUB_TOKEN}" "https://api.github.com/repos/zhongfly/mpv-winbuild/releases/latest" || true)
+          MPV_URL=$(printf '%s\n' "$RESP" | grep -oE 'https://[^"]*mpv-x86_64-[0-9][^"]*\.7z' | grep -vE 'dev|v3' | grep -m1 . || true)
+          if [ -z "$MPV_URL" ]; then
+            echo "ERROR: could not resolve an mpv-x86_64 build URL from zhongfly/mpv-winbuild"
+            exit 1
+          fi
+          echo "mpv archive: $MPV_URL"
+          curl -fL --retry 5 "$MPV_URL" -o mpv.7z
+          7z x mpv.7z mpv.exe -y
+          mv mpv.exe "mpv-${TARGET}.exe"
+          ls -la
+
+      - name: Build and publish release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        with:
+          tauriScript: pnpm tauri
+          args: --target x86_64-pc-windows-msvc
+          tagName: harbor-windows
+          releaseName: "Harbor for Windows"
+          releaseBody: "Custom Harbor build with your mods (episode stills, RT in banner, ends-at clock, watch/in-progress icons, d-pad navigation, favorites wall). Download the .msi or setup .exe below and install."
+          releaseDraft: false
+          prerelease: false

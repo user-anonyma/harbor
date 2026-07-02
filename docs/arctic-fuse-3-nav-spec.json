@@ -1,0 +1,999 @@
+{
+  "summary": "Study the Arctic Fuse 3 Kodi skin repo and produce a Harbor remote-first nav/interaction spec",
+  "agentCount": 9,
+  "logs": [],
+  "result": {
+    "studies": [
+      {
+        "dimension": "focus-nav",
+        "howItWorks": "Arctic Fuse 3's focus navigation is remote-first and D-pad-driven, built on Kodi's control routing system. Every focusable element (button, list, grouplist) has explicit `<onup>`, `<ondown>`, `<onleft>`, `<onright>` attributes that point to other control IDs or execute Kodi actions. The home screen uses a dual-panel layout: the left sidebar (ID 300, a button menu) acts as a hub switcher, while the content area (IDs 301, 400, 500, 601, 602) displays hierarchical content. Focus routing is context-aware—vertical mode (HomeSwitcher.Vertical setting) uses left/right to move between sidebar and content, while horizontal mode uses up/down. List controls (fixedlist, wraplist, panel, grouplist) auto-scroll to keep focused items visible, with a `scrolltime` delay (400ms quadratic tween) between focus moves. A spotlight area (ID 301, wraplist) wraps left/right and uses `Control.Move(301,-1/1)` for circular navigation. The framework layers focused and unfocused layouts with conditional visibility—when a control gains focus, a fade animation (200-300ms) swaps between two visual states. Default focus on window load is determined by `<defaultcontrol>` with an `always` flag, and focus memory is preserved using window properties and container metadata. Hard stops (top/bottom of content) route to external windows (ActivateWindow(1180)) rather than allowing escape; this enforces purposeful navigation boundaries.",
+        "keyBehaviors": [
+          {
+            "behavior": "Explicit D-pad routing per control",
+            "detail": "Each control has onup/ondown/onleft/onright attributes pointing to numeric control IDs (300=sidebar, 601=categories, 500=widgets) or Kodi commands. Onup from a widget goes to ID 601 (category list), ondown from 601 goes to the current widget (resolved via Container(601).ListItem.Property(widget_id))."
+          },
+          {
+            "behavior": "Sidebar/content boundary navigation",
+            "detail": "In vertical mode, onleft from content area ID 601 routes to sidebar ID 300 (SetFocus(300)); onright from 300 navigates to content (SetFocus(601) or SetProperty(Bumper.Direction,Right,Home) + ActivateWindow(1180) for fullscreen)."
+          },
+          {
+            "behavior": "Wrapping vs hard-stop behavior",
+            "detail": "Spotlight (ID 301) is a wraplist—left/right arrows cycle through items via Control.Move(301,-1) and Control.Move(301,1), allowing circular navigation. Content rows (fixedlist) do not wrap; pressing down on the last row activates window 1180 (bumper UI) instead of looping."
+          },
+          {
+            "behavior": "Focus memory via properties",
+            "detail": "Focus state is preserved using window properties (e.g., Container(601).CurrentItem) and skin strings (e.g., HomeSwitcher.Home.Toggle). On returning to a hub, the system checks these properties and restores the previous focused item via SetFocus($INFO[Container(601).ListItem.Property(widget_id)])."
+          },
+          {
+            "behavior": "Dual-layer focused/unfocused layouts",
+            "detail": "List items have `<itemlayout>` (unfocused) and `<focusedlayout>` (focused). The focusedlayout contains two control groups with inverse fade animations—when Control.HasFocus(id) is true, one fades in (100%) while the other fades out (0%), creating a swap effect over 200ms."
+          },
+          {
+            "behavior": "Center focus positioning in rows",
+            "detail": "Horizontal list controls use `<focusposition>2</focusposition>` to keep the focused item centered in view (item appears at index 2 of the visible window, typically 3-5 items visible). This applies to category selectors (ID 601) and button trays."
+          },
+          {
+            "behavior": "Conditional navigation based on layout orientation",
+            "detail": "Onup/ondown from widgets checks Skin.HasSetting(HomeSwitcher.Vertical)—if true, up triggers a bumper direction property and window switch; if false, up goes directly to ID 300 (sidebar). This toggles between vertical stacking and horizontal side-by-side layouts."
+          },
+          {
+            "behavior": "Initial and return focus with default controls",
+            "detail": "Home.xml and hub windows use `<defaultcontrol always='false'>300</defaultcontrol>` to set initial focus, with fallback to 400 if the sidebar is hidden. First-run logic (Action_FirstStart_HomeFocus) prioritizes spotlight (310) > category (601) > first visible widget (501+) > sidebar (300)."
+          },
+          {
+            "behavior": "Movement constants for different item sizes",
+            "detail": "List controls define a `<movement>` value (e.g., 6 for posters, 4 for cards, 3 for landscape, 2 for board) that controls how many items shift horizontally when focus moves left/right, keeping the list centered dynamically."
+          },
+          {
+            "behavior": "Grouplist auto-layout and focus propagation",
+            "detail": "ID 602 is a grouplist (vertical) containing nested widget groups. Pressing down from ID 601 auto-focuses the first focusable child of the active widget group—Kodi's grouplist system handles this without explicit routing in each widget."
+          }
+        ],
+        "concreteNumbers": [
+          "scrolltime: 400ms with quadratic tween (List_Core, line 796)",
+          "focusedlayout fade animation: 200ms for layer swap (Includes_Hubs.xml, line 834-854)",
+          "zoom on focus: 300ms sine easing in/out (Includes_Animations.xml, lines 76-77)",
+          "slide animation: 400ms cubic easing for widget state transitions (Includes_Hubs.xml, lines 336-337)",
+          "control.Move() is instantaneous (no animation time)",
+          "focusposition: 2 (center focus in horizontal lists like ID 601, line 66 ButtonMenu.xml)",
+          "movement: 6 (posters, line 107 Constants.xml), 4 (cards, line 118), 3 (landscape, line 134), 2 (board, line 140), 8 (icons, line 96)",
+          "view_offx: 80px (content left/right padding, line 26 Constants.xml)",
+          "view_top: 180px (content top margin, line 6 Constants.xml)",
+          "view_poster_itemlayout_w: 257.14px per item (line 103 Constants.xml)",
+          "view_card_itemlayout_w: 771.42px per item (line 116)",
+          "view_landscape_itemlayout_h: 270.625px (line 130)",
+          "view_board_movement uses 600px wide items (line 136-140)",
+          "fade effect: start=100 end=0 time=200ms (Includes_Objects.xml, line 834)",
+          "item fade on focus loss: start=100 end=30 time=200ms conditional (Includes_Hubs.xml, line 436)",
+          "spotlight slide-down animation: 260px offset, 400ms quadratic (line 185-186 Includes_Hubs.xml)",
+          "button tray height: 100px (ButtonMenu.xml, line 71, 122)",
+          "icon size in tray: 80x80px (ButtonMenu.xml, line 244-245)",
+          "border size on images: 4-20px padding (varies by context)",
+          "button font: font_mini (Includes_Defaults.xml, line 26)",
+          "label font: font_main (Includes_Defaults.xml, line 7)",
+          "dialog button width: 320px (line 40 Constants.xml)"
+        ],
+        "harborMapping": [
+          {
+            "kodiThing": "onup/ondown/onleft/onright attributes on <control> elements",
+            "harborChange": "Map to spatial-nav event handlers in useFocusNav() hook; use data attributes (data-nav-up, data-nav-down, data-nav-left, data-nav-right) with control IDs or action callbacks"
+          },
+          {
+            "kodiThing": "Control ID references (300, 301, 601, 602, etc.) for focus routing",
+            "harborChange": "Assign a unique ref or aria-id to each focusable card/button; create a graph/map of focus connections; when spatial-nav detects a direction key, look up the target control ID and call setFocus(targetRef)"
+          },
+          {
+            "kodiThing": "<focusedlayout> vs <itemlayout> dual rendering",
+            "harborChange": "Use CSS :focus pseudo-class to toggle between two sibling divs or apply transforms; in React, render both layers conditionally based on hasFocus state and fade between them (opacity: 0/100 over 200ms, will-change: opacity)"
+          },
+          {
+            "kodiThing": "<focusposition>2</focusposition> for center-aligned horizontal lists",
+            "harborChange": "Use CSS scroll-behavior and scrollIntoView({behavior:'smooth', block:'center'}) when focus moves in a horizontal list; calculate offset to keep item 2 (0-indexed) visible in viewport"
+          },
+          {
+            "kodiThing": "<movement>6/4/3/2 values controlling viewport scroll step",
+            "harborChange": "Pass movement value to spatial-nav config or calculate visible items per row (itemWidth / viewportWidth), then scroll by that many items on left/right arrow (animate scroll-left over 400ms)"
+          },
+          {
+            "kodiThing": "<scrolltime tween='quadratic'>400</scrolltime> on list controls",
+            "harborChange": "Use CSS transitions or Framer Motion: transition={{ duration: 0.4, ease: 'easeInOutQuad' }} on transform translate or scroll-left property"
+          },
+          {
+            "kodiThing": "<defaultcontrol always='false'>300</defaultcontrol> window-level focus init",
+            "harborChange": "On route/page mount, useEffect(() => setFocus(defaultId), [pageId]); store defaultId in context or route meta; skip if shouldRestoreFocus flag is set (for back navigation)"
+          },
+          {
+            "kodiThing": "Container(id).ListItem.Property(widget_id) focus restoration",
+            "harborChange": "Store focused item ID in React Context or sessionStorage; on returning to hub, query that stored ID and call setFocus(restoredId); use useCallback to memoize the lookup"
+          },
+          {
+            "kodiThing": "Control.Move(301,-1/1) circular navigation in wraplist",
+            "harborChange": "Add wrapping mode to spatial-nav config (wrapNavigation: true); when focus moves left from item 0, move to lastItem; right from lastItem moves to firstItem. Or use a circular index: (index + direction + length) % length"
+          },
+          {
+            "kodiThing": "Skin.HasSetting(HomeSwitcher.Vertical) conditional routing",
+            "harborChange": "Store layout mode in Context (layoutMode='vertical' | 'horizontal'); check in onup/ondown/onleft/onright handlers and route to different target IDs based on mode"
+          },
+          {
+            "kodiThing": "ActivateWindow(1180) hard-stop bumper navigation",
+            "harborChange": "Create a top-level bumper/overlay component that captures out-of-bounds navigation; trigger on onup from top widget or ondown from bottom row; fade in a menu overlay"
+          },
+          {
+            "kodiThing": "<grouplist> vertical auto-layout with nested groups",
+            "harborChange": "Use flexbox (flex-direction: column) for grouplist; make nested widget groups focusable containers; spatial-nav auto-focuses first focusable child when parent group gains focus (use tabindex='-1' parent, tabindex='0' for first child)"
+          },
+          {
+            "kodiThing": "Animation type='Conditional' with effect='fade' 200ms layer swap",
+            "harborChange": "Use Framer Motion or Tailwind @apply with transition-opacity 200ms; mount both layout divs, conditionally hide/show via opacity CSS class, triggered by :focus or React focus state"
+          },
+          {
+            "kodiThing": "Kodi window property (TMDbHelper.WidgetContainer) for metadata routing",
+            "harborChange": "Store active widget/container info in Redux slice or Context; use selectors to determine which panel's metadata to display; update on SetFocus(id) action"
+          },
+          {
+            "kodiThing": "SetFocus(id, 0, absolute) forced focus + position reset",
+            "harborChange": "In spatial-nav, implement forceSetFocus(id, { resetScroll: true }) to jump to item and scroll to top/first item; useful for 'go to first item on back'"
+          }
+        ]
+      },
+      {
+        "dimension": "animations",
+        "howItWorks": "Arctic Fuse 3 uses a layered animation system where scrolling containers employ `scrolltime` elements (300-400ms, quadratic tween) to smoothly move between items. Each item layout uses conditional fade/zoom animations to swap between focused and unfocused states instantly. The single Focus animation (Animation_FocusBounce) applies a coordinated zoom-scale and fade effect: zooming from 96.5% to 100% while simultaneously fading from 20% to 100% opacity, both over 150ms with sine tween inout easing, creating a \"lift and brighten\" effect. Movement between rows/sections triggers a directional bumper animation (slide 60ms, return slide 180ms with 80ms delay, sine tween) that provides haptic-like feedback. Dialog entries use zoom-in (400ms, back tween out) and slide-in animations (300-600ms, back or cubic tween). All animations use parametrized delays and conditions to create staggered, responsive behavior without blocking navigation.",
+        "keyBehaviors": [
+          {
+            "behavior": "Focus Bounce (Item Selection)",
+            "detail": "When an item gains focus via D-pad navigation, Animation_FocusBounce triggers: zoom 96.5→100% + fade 20→100% over 150ms (sine tween, inout easing). Uses center=\"auto\" to scale from item center. Creates lift effect; no visual delay on focus gain itself."
+          },
+          {
+            "behavior": "Scroll Container Smoothing",
+            "detail": "All list containers use scrolltime element with 300-400ms duration (quadratic tween, applied to container movement). Easing varies by context: \"out\" for standard views, \"inout\" for seekbar. Movement values (1-7) control visible items before scrolling triggers."
+          },
+          {
+            "behavior": "Focused Layout Swap (Cross-fade)",
+            "detail": "Instead of animating the focused item, Arctic Fuse maintains two layout versions (itemlayout + focusedlayout) and cross-fades between them using conditional fade animations (fade 100→0 on unfocus, fade 100→0 on focus, both instant). Selected state visually swaps a SelectBox outline and changes text color via conditional diffuse effects."
+          },
+          {
+            "behavior": "Directional Movement Bumper",
+            "detail": "Navigation between menu groups (Home hub) triggers Animation_Group_Bumper: quick initial slide (±20px, 60ms sine tween) followed by return slide to origin (20px → 0, 180ms sine, 80ms delay). Direction reverses based on nav direction (up/down/left/right)."
+          },
+          {
+            "behavior": "Dialog Entry Animations",
+            "detail": "Dialogs use two-stage animations: fade 0→100% (200-300ms) + zoom/slide from off-screen (400-600ms, back tween out). Delays are parameterized (200-400ms visible_delay, 400ms windowopen_delay) for staggered appearance."
+          },
+          {
+            "behavior": "Conditional Visibility Animations",
+            "detail": "Non-focus-based state changes (loading, expanded view) use Conditional animation type with parametrized duration, tween, and end values. Example: fade 100→$PARAM[end] (time=200, sine, out) triggers when Container.IsUpdating or custom expression evaluates."
+          }
+        ],
+        "concreteNumbers": [
+          "150ms zoom+fade (focus bounce, sine inout)",
+          "300ms zoom in/out (sine out)",
+          "300ms slide (conditional, sine inout)",
+          "400ms slide (animation_slide_in, cubic out)",
+          "200-300ms fade (sine out or cubic out)",
+          "400ms dialog zoom (back out)",
+          "60ms initial bumper slide (sine)",
+          "180ms return bumper slide (sine) + 80ms delay",
+          "400ms scrolltime (quadratic)",
+          "300ms scrolltime (quadratic)",
+          "96.5% zoom start (focus bounce)",
+          "100% zoom end (focus bounce)",
+          "20% fade start (focus bounce)",
+          "85-100% zoom range (zoom in/out animations)",
+          "0-100% fade range (standard)",
+          "-20 to +20px slide distance (bumper)"
+        ],
+        "harborMapping": [
+          {
+            "kodiThing": "scrolltime (300-400ms, quadratic tween)",
+            "harborChange": "Map to CSS `scroll-behavior: smooth` with custom container transition: `transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1)` on scroll position changes. Use Framer Motion to animate container offset with easing matching quadratic (cubic-bezier approximation)."
+          },
+          {
+            "kodiThing": "Animation_FocusBounce (150ms zoom 96.5→100% + fade 20→100%, sine inout)",
+            "harborChange": "Create React component `<FocusBounce>` using Framer Motion: `spring({ stiffness: 400, damping: 30 })` or manual keyframes over 150ms. Apply transform: scale(0.965)→scale(1) + opacity: 0.2→1 simultaneously. Trigger on spatial-nav focus callback via useEffect."
+          },
+          {
+            "kodiThing": "Focused Layout (conditional fade swap between itemlayout/focusedlayout)",
+            "harborChange": "In Harbor's spatial-nav, use CSS selectors `:focus-within` or data attribute `[data-focused='true']` to swap className. Apply CSS transition on color, border, background opacity (300ms). No animation duration needed; the swap is instant but styled differently."
+          },
+          {
+            "kodiThing": "Animation_Group_Bumper (60ms down + 180ms return, sine, directional)",
+            "harborChange": "On spatial-nav arrow press, apply transient Framer Motion animation to focused card: `animate={{ y: -20 }}` over 60ms sine, then `animate={{ y: 0 }}` over 180ms sine with 80ms transition delay. Repeat for x-axis on left/right nav."
+          },
+          {
+            "kodiThing": "Dialog zoom-in (400ms, back tween out, scale 20→100%)",
+            "harborChange": "For modal dialogs, use Framer Motion `initial={{ scale: 0.2, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}` with transition `{ duration: 0.4, ease: 'easeOut', type: 'tween' }`. Center using transform-origin."
+          },
+          {
+            "kodiThing": "Conditional fade animations (200-300ms, sine out)",
+            "harborChange": "Use framer-motion `AnimatePresence` + `motion.div` with conditional `animate={{ opacity: [1, 0] }}` when condition evaluates false. Duration 200-300ms, easing function ease-out polynomial."
+          },
+          {
+            "kodiThing": "Movement values (1-7) controlling visible items before scroll",
+            "harborChange": "Harbor's spatial-nav already has geometric focus detection. Map movement constant to grid visible rows: use CSS Grid with `auto-rows` or flex with visible item count calculation. Movement=5 might mean 5 poster cards visible before horizontal scroll kicks in."
+          }
+        ]
+      },
+      {
+        "dimension": "sizing & typography",
+        "howItWorks": "Arctic Fuse 3 uses a hierarchical, grid-based sizing system anchored to a 1920x1080 (16:9) default design resolution, with all dimensions defined in pixel constants and font sizes following a pentatonic typographic scale (base 30px, ratio 2). The system scales responsively to other aspect ratios (4:3, 16:10, 17:9, 18:9, 19.5:9, 21:9) via aspect-ratio-specific constant overrides. Typography is based on Inter font with 7 semantic tiers plus decorative options; all font rendering uses linespacing multipliers (1.13–1.45×) quantized to 40px grid units for justified plot text. Component sizing is organized by view type (posters, cards, landscapes, icons) with consistent 40-120px padding/margins between items. Focus animations are geometric (96.5%→100% zoom + 20%→100% fade over 150ms) with ColorHighlight border rings at 20px border radius.",
+        "keyBehaviors": [
+          {
+            "behavior": "Pentatonic typography scale",
+            "detail": "Font sizes follow n=5, r=2, f0=30px formula: hint(15) → tiny(21) → mini(24) → main(28) → midi(32) → head(38) → huge(43). Doubles for large titles: main_x2(56), midi_x2(64), huge_x2(86). Inter-Regular, Inter-Bold, Inter-Light; optional Inter-Unicode for CJK. All fonts use calculated linespacing (1.13–1.455×) for readability at 10-foot TV viewing distance."
+          },
+          {
+            "behavior": "Grid-quantized spacing",
+            "detail": "All major spacing values snap to 40px grid (view_pad: 80, view_top: 180, view_row: 510). Dialog buttons fixed at 320px width with 30px text offset; buttons scale to 520px for main dialogs. Padding inside containers: -3px to +40px depending on context."
+          },
+          {
+            "behavior": "View-specific item layouts with movement constants",
+            "detail": "Posters: 217×310px item / 257×310px layout, movement=6. Cards: 731×310px item / 771×310px layout, movement=4. Landscapes: 410×231px item / 450×271px layout, movement=3. Icons: 160×230px item / 200×270px layout, movement=8. Movement values control focus scroll smoothness (lower = slower); layout dimensions include padding/gap."
+          },
+          {
+            "behavior": "Focus ring geometry with bounce animation",
+            "detail": "SelectBox uses 20px border on semi-transparent texture + -3px padding group. When focusbounce=true: zoom 96.5%→100% (150ms, sine, inout) + fade 20%→100% (150ms, back, out). No bounce for board/banner items. Border rendered with ColorHighlight (theme-determined, typically bright accent)."
+          },
+          {
+            "behavior": "Responsive aspect ratio scaling",
+            "detail": "Default 1920×1080; override files for 16:10 (1728×1080), 18:9 (2160×1080), etc. Movement and notification repositioning values change per ratio to maintain visual balance. Aspect-specific .xml files layer over base constants; no CSS media queries—pure XML conditions."
+          }
+        ],
+        "concreteNumbers": [
+          "Design resolution: 1920×1080 (16:9 default)",
+          "Font sizes: 15, 21, 24, 28, 32, 38, 43, 56, 64, 86 px",
+          "Line heights: 1.13, 1.169, 1.16, 1.20, 1.23, 1.31, 1.455 (multipliers)",
+          "Main padding: 80 px (view_pad), 180 px (view_top)",
+          "Poster layout: 217×310 px (item) / 257×350 px (itemlayout), movement=6",
+          "Card layout: 731×310 px (item) / 771×350 px (itemlayout), movement=4",
+          "Landscape layout: 410×231 px (item) / 450×271 px (itemlayout), movement=3",
+          "Icon layout: 160×230 px (item) / 200×270 px (itemlayout), movement=8",
+          "Dialog button width: 320 px, main button: 520 px, text offset: 30 px",
+          "Focus ring border: 20 px with -3 px inner padding",
+          "Focus bounce zoom: 96.5% to 100% over 150 ms",
+          "Focus bounce fade: 20% to 100% over 150 ms",
+          "OSD item gap: 37 px",
+          "List scroll time: 400 ms (quadratic tween), EPG: 300 ms",
+          "Hub widget spacing: 640, 880, 440 px (bumpers and gutters)",
+          "View row height: 510 px (for vertical hub stacking)"
+        ],
+        "keyFiles": [
+          "/tmp/arctic-fuse-3/1080i/Includes_Font.xml",
+          "/tmp/arctic-fuse-3/1080i/Includes_Constants.xml",
+          "/tmp/arctic-fuse-3/1080i/Includes_Dimensions.xml",
+          "/tmp/arctic-fuse-3/1080i/Includes_Lists.xml",
+          "/tmp/arctic-fuse-3/1080i/Includes_Layouts.xml",
+          "/tmp/arctic-fuse-3/1080i/Includes_Objects.xml",
+          "/tmp/arctic-fuse-3/1080i/Includes_Animations.xml",
+          "/tmp/arctic-fuse-3/1080i/Includes_Textures.xml",
+          "/tmp/arctic-fuse-3/1080i/Includes_Constants_16x10.xml",
+          "/tmp/arctic-fuse-3/1080i/Includes_Constants_18x9.xml"
+        ],
+        "harborMapping": [
+          {
+            "kodiThing": "Font size + linespacing system (Inter 15–86px with 1.13–1.455 multipliers)",
+            "harborChange": "CSS custom properties for font-size scale (--fs-hint through --fs-huge-x2) and line-height scale (--lh-tiny through --lh-midi). Use `font-size: var(--fs-main)` and `line-height: var(--lh-main)` on components. For 10-foot viewing, preserve Inter font; test readability at 2–3m distance."
+          },
+          {
+            "kodiThing": "Grid-quantized padding (40px baseline: 80, 180, 320, 520, 640 px)",
+            "harborChange": "Define spacing scale: --sp-1 = 8px, --sp-2 = 16px, --sp-5 = 40px, --sp-10 = 80px, --sp-22 = 180px, --sp-40 = 320px. Use Tailwind-compatible scale or CSS variables. Container padding = --sp-10, gutters between rows = --sp-22, widget gaps = --sp-5 to --sp-10."
+          },
+          {
+            "kodiThing": "Poster layout: 217×310px item, 257×350px layout, movement=6",
+            "harborChange": "Card component with `width: 217px; height: 310px`, 20px inner padding for image. Container spacing: 40px gaps (itemlayout width 257 = 217 + 40). Spatial-nav movement='slower' when movement value < 5 (defer smooth scrolling vs. snap)."
+          },
+          {
+            "kodiThing": "Card layout: 731×310px item, 771×350px layout, movement=4",
+            "harborChange": "Wider card variant. Same aspect (310px height), but full width available with 20px side padding per side. SpatialNav movement='medium' (movement=4 is mid-range). Use CSS Grid: `grid-template-columns: repeat(auto-fit, 771px)`."
+          },
+          {
+            "kodiThing": "Landscape layout: 410×231px item, 450×271px layout, movement=3",
+            "harborChange": "Landscape-oriented card (16:9 aspect, ~1.77:1). Gap between items: 40px. Scroll slowly (movement=3, slowest grid layout). Apply aspect-ratio: 16/9; width: 410px; container: 450px."
+          },
+          {
+            "kodiThing": "Icon layout: 160×230px item, 200×270px layout, movement=8",
+            "harborChange": "Small icon + label. Fastest movement (8) means tight focus jump animation timing. 40px padding zone around 160×230px visual. Use CSS: `width: 160px; height: 230px; padding: 20px;` inside parent 200×270px."
+          },
+          {
+            "kodiThing": "Focus ring: 20px border + -3px inner group, 96.5%→100% zoom + 20%→100% fade over 150ms",
+            "harborChange": "CSS focus-ring: `outline: 20px solid var(--color-highlight); outline-offset: -3px;` on focused element. On :focus, apply `@keyframes focusBounce { 0% { transform: scale(0.965); opacity: 0.2; } 100% { transform: scale(1); opacity: 1; } }` with `animation: focusBounce 150ms cubic-bezier(0.47, 0, 0.745, 0.715) forwards;` (back easing approximation)."
+          },
+          {
+            "kodiThing": "List scroll time: 400ms quadratic tween (fixedlist/panel)",
+            "harborChange": "When focus changes within horizontal fixedlist, apply transition to scrollLeft or transform: `transition: transform 400ms cubic-bezier(0.455, 0.03, 0.515, 0.955) !important;` (quadratic easing in CSS). Use spatial-nav scroll handler with 400ms debounce."
+          },
+          {
+            "kodiThing": "Responsive aspect-ratio constants (16:10, 18:9 override files)",
+            "harborChange": "Store dimension overrides in data-aspect attribute or CSS custom properties scoped to [data-aspect='18:9']. Override --width and --movement values per breakpoint. Example: `[data-aspect='18:9'] .poster-grid { --item-w: 250px; --movement-speed: 5; }`."
+          },
+          {
+            "kodiThing": "Dialog button: 320px width, text offset 30px; main: 520px",
+            "harborChange": "Button.tsx: `width: 320px` (normal dialog), `width: 520px` (mainButton variant). Padding-left: 30px for icon + text. Use Tailwind: `w-80 (320px equivalent) or w-[520px]`, `pl-[30px]`."
+          },
+          {
+            "kodiThing": "Hub widget stacking: 640, 880, 440, 1010px bumpers and labels",
+            "harborChange": "Use CSS Grid/Flexbox with explicit gap values (--sp-40 = 320, --sp-44 = 440, --sp-88 = 880) for vertical stacks. Widget containers: `margin-bottom: 880px;` with `gap: 60px;` between label and content."
+          }
+        ]
+      },
+      {
+        "dimension": "context-menu",
+        "howItWorks": "Arctic Fuse opens context menus using Kodi's `Action(contextmenu)` remote action, which activates dialog windows (1170, 1172, or contextmenu dialog ID). Each dialog is an XML-based layout with D-pad navigation: items are arranged in lists or grids with `<onup>/<ondown>/<onleft>/<onright>` properties controlling focus routing. When focused, items show a different `<focusedlayout>` with highlight color and optional hint labels. The main options dialog has a side-panel layout (DialogSideMenu) with optional bottom tray of horizontal buttons. The context menu dialog for titles has a two-part layout: left side shows title artwork/metadata pulled from TMDbHelper properties, right side has a vertical list of action items (plot, wiki, related, trailers, etc.) with a scrollbar. Animations slide/bounce the dialog in/out. In Harbor, context menus are invoked via native JavaScript `contextmenu` event (right-click), displayed as portals outside the DOM tree. The \"big\" menu for titles is a full-screen modal overlay with a semi-transparent backdrop, a left preview card (300px), and a right action panel (440px, scrollable list). A spatial-nav system drives focus using arrow keys or D-pad, with geometric scoring (forward distance weighted 1:1, cross distance weighted 2:1) to find the nearest focusable element. Focus is scoped to the topmost open dialog. When the big context menu opens, the first action auto-focuses after 40ms (allowing remote users to navigate without initial button press). The small popup menu (for player/editable fields) uses fixed positioning near the mouse cursor.",
+        "keyBehaviors": [
+          {
+            "behavior": "Remote/D-pad invocation and focus routing",
+            "detail": "Arctic Fuse responds to `Action(contextmenu)` built-in Kodi action, mapping to the remote's context/options button. Dialog windows use `<onup>/<ondown>/<onleft>/<onright>` elements on list/button controls to explicitly route focus (e.g., `<ondown>SetFocus(7020)</ondown>`). Harbor uses native `document.addEventListener('contextmenu')` for right-click, and `addEventListener('keydown')` with arrow key mapping (ArrowUp/Down/Left/Right). Spatial-nav maintains scoping to the topmost dialog via `scopeRoot()` which queries `[role='dialog'], [aria-modal='true']` and filters visible dialogs."
+          },
+          {
+            "behavior": "D-pad navigation as hard boundaries",
+            "detail": "Arctic Fuse uses strict containment: left/right arrows stay in the same row with hard stops at edges (no wrapping). Harbor's spatial-nav implements the same with `requireOverlap` flag in the `pick()` function—when true, left/right only consider elements in the same vertical band (checked via `Math.min(a.bottom, r.bottom) - Math.max(a.top, r.top)`). Up/down prefer the same column but fall back to any element in the next row if nothing aligns."
+          },
+          {
+            "behavior": "Two-panel layout: content + actions side-by-side",
+            "detail": "Arctic Fuse's context menu for titles uses `Part_Dialog_Backing` with `Dimension_DialogFlipMenu` (if artwork shown) or `Dimension_DialogMiniMenu`. Left group `Size_LeftGroup_Large` contains `DialogPlot_Artwork` (poster image fetched from `$INFO[Window(Home).Property(TMDbHelper.ListItem.base_poster)]`). Right group `Size_RightGroup_Large` contains header (title label, close button) and body with the list (ID 6000, vertical list, width 100px, height 700px). Harbor mirrors this: preview card (300px, aspect-ratio 2/3, hidden on mobile) on left, action panel (440px, flex flex-col) on right, both wrapped in a full-screen overlay with `bg-black/55 backdrop-blur-sm` and `animate-popover-in`."
+          },
+          {
+            "behavior": "Automatic focus to first item on menu open",
+            "detail": "Arctic Fuse uses `<onload>AlarmClock(refocus,SetFocus(7021),00:00,silent)</onload>` to defer focus (AlarmClock can run async actions). Harbor uses `useEffect` with `window.setTimeout(..., 40)` to focus the first action button (marked with `data-cm-first` attribute) after 40ms, allowing the portal to render before focus shift, which prevents visual jank and lets remote users immediately navigate."
+          },
+          {
+            "behavior": "Scrollable list with pagination indicators",
+            "detail": "Arctic Fuse's options dialog uses `<grouplist>` with `<pagecontrol>` linked to a scrollbar. The list has dynamic `<onup>` routing that walks up through visible items (e.g., `SetFocus(1020)` if visible, else `SetFocus(1019)`, ..., fall back to `SetFocus(1001)`). Arctic shows page info via `Part_ItemPage` displaying 'X / Y'. Harbor wraps items in a `flex flex-1 flex-col overflow-y-auto` div with `[scrollbar-width:none]` to hide the native scrollbar. No explicit pagination UI; it's implicit in the scrollable height (max height fills remaining space after header)."
+          },
+          {
+            "behavior": "Conditional item visibility and dynamic labels",
+            "detail": "Arctic Fuse items use `<visible>` blocks with Kodi conditions (e.g., `<visible>Window.IsVisible(videos)</visible>`) and dynamic labels via `$INFO[...]` and `$VAR[...]` (e.g., `<label>$VAR[Label_SortMethod]</label>`). Harbor uses React state and conditional rendering: items are built in JavaScript, and `onClick` handlers close the menu after performing action (e.g., `const handleDetails = () => { openMeta(meta); done(); }`). Each BigAction has id, icon, label, onClick, and optional `accent` flag."
+          },
+          {
+            "behavior": "Keyboard-dismissal and Escape key handling",
+            "detail": "Arctic Fuse doesn't show explicit Escape handling in the main dialog XML; it relies on Kodi's dialog system (Back button/menu key closes). Harbor's context-menu useEffect listens for `e.key === 'Escape'` and calls `close()`. It also closes on scroll or window resize (via `addEventListener('scroll', onScroll, true)`)."
+          },
+          {
+            "behavior": "Accent/highlight for special actions and state indicators",
+            "detail": "Arctic Fuse uses color schemes: unfocused items use `color_nf` (e.g., 'dialog_fg_70'), focused items use `$VAR[ColorSelected]`. Harbor uses a `accent` boolean on BigAction: true items get `bg-accent/90 text-white` class, false get `text-ink` with `hover:bg-raised`. Watchlist/favorite actions are marked with `accent: true` to highlight their importance (watchlist toggle is line 225-230)."
+          },
+          {
+            "behavior": "Bottom tray of media controls (player context)",
+            "detail": "Arctic Fuse includes `ButtonMenu_MediaTray` (a horizontal fixedlist ID 6099 with `orientation=horizontal, focusposition=2, movement=2, height=100px`) containing Play, Previous, Next, Fullscreen, etc. Tray only appears when playing (`<include condition='Player.HasMedia'>`). Harbor shows player-specific actions inline in the small popup menu when `playerActions` is truthy, adding Fullscreen and Download items with separator."
+          },
+          {
+            "behavior": "Customizable tile/button layouts (2, 3, or 4 per row)",
+            "detail": "Arctic Fuse uses `Skin.String(OptionsTiles.Layout)` to select layout: `ButtonMenu_Layout_Two`, `_Three`, or `_Four`. Each layout wraps buttons in `ButtonMenu_LayoutGroup_Single` (vertical stack), `_Double` (two buttons side-by-side with `width=50%` left/right), organizing them as a grid. Harbor does not have this—actions are always a single vertical list. However, Harbor's preview card (left side) could be styled as a tile-like component."
+          }
+        ],
+        "concreteNumbers": [
+          "Action(contextmenu) - Kodi built-in action for context menu invocation",
+          "40ms - setTimeout delay before auto-focusing first action in Harbor's context menu (allows portal render)",
+          "400ms - Arctic Fuse media tray scroll time (scrolltime tween='quadratic')",
+          "100px × 100px - Arctic Fuse media tray item dimensions",
+          "52px - Harbor BigItem (menu item) height in context panel",
+          "36px (h-9) - Harbor small popup menu item height",
+          "440px - Harbor context panel width (main title menu)",
+          "220px - Harbor small popup menu width",
+          "120px - Harbor small popup menu height (initial, can vary)",
+          "300px - Harbor preview card width (left side of big menu, hidden on mobile)",
+          "2/3 - Harbor poster aspect ratio (aspect-[2/3])",
+          "6px (gap-1.5) - Gap between items in Harbor's action list",
+          "24px (p-6) - Padding inside Harbor's context panel",
+          "700px - Arctic Fuse context menu list height (ID 6000)",
+          "100px - Arctic Fuse button menu width (ID 6000, centerright=50 offset)",
+          "50px - Arctic Fuse media tray conditional slide offset for even item counts (animation end='-50')",
+          "80px height - Arctic Fuse special button visual height (ButtonMenu_Special_Button)",
+          "80px width - Arctic Fuse special button icon container",
+          "0 to 280px - Arctic Fuse dialog vertical slide adjustments based on item count (lines 22-28 in Dialog_DialogView.xml)",
+          "0 to -50 pixels - Arctic Fuse media tray slide offset for NumItems == 2 or 4",
+          "focusposition=2, movement=2 - Arctic Fuse horizontal list focus center position (media tray stays visible)"
+        ],
+        "harborMapping": [
+          {
+            "kodiThing": "Dialog 1170 (Custom_1170_Dialog_Options.xml) - General options/power menu",
+            "harborChange": "Harbor's BigItem context menu (lines 177-348 in src/components/context-menu.tsx) - Full-screen modal overlay with action list. No equivalent to the button tile layouts (2/3/4 per row); always a vertical list. Could extend to support grid layout if needed."
+          },
+          {
+            "kodiThing": "Dialog contextmenu (Dialog_DialogContextMenu.xml) - Title context menu with artwork + actions",
+            "harborChange": "Harbor's BigItem panel matches structure: left preview card (poster + metadata), right action panel (scrollable list). Both are part of the same component. Arctic's two-column layout with scrollbar (ID 61) maps to Harbor's `overflow-y-auto` scrollable div."
+          },
+          {
+            "kodiThing": "onup/ondown/onleft/onright XML navigation properties",
+            "harborChange": "Harbor's spatial-nav.ts geometric focus system: `move(dir)` calls `pick(active, pool, dir, requireOverlap)` to find nearest focusable element. No explicit XML routing; instead, calculated from element positions and focus state."
+          },
+          {
+            "kodiThing": "Action(contextmenu) Kodi built-in action",
+            "harborChange": "JavaScript `document.addEventListener('contextmenu', handler)` on lines 152-153 of context-menu.tsx. Also listens for contextmenu event in hover-preview/dismiss-listeners.ts for coordination."
+          },
+          {
+            "kodiThing": "focusedlayout showing highlight + hint label",
+            "harborChange": "Harbor's `BigItem` component uses `className` with conditional `bg-accent/90 text-white` for focused state (accent=true) or `hover:bg-raised` for unfocused. No separate hint label component; label is inline in the button text."
+          },
+          {
+            "kodiThing": "ButtonMenu_MediaControls tray (Includes_ButtonMenu.xml lines 3-56)",
+            "harborChange": "Harbor's player context actions: when `playerActions` is truthy, adds Fullscreen and Download items to the small popup menu (lines 374-396 in context-menu.tsx). Not a separate tray, but inline items in the menu."
+          },
+          {
+            "kodiThing": "Animations: Conditional slide effect (animation effect='slide' condition='Integer.IsEqual(...)')",
+            "harborChange": "Harbor uses CSS `animate-popover-in` class (defined in index.css, presumably a keyframe animation). No conditional layout adjustments based on item count like Arctic's lines 22-28."
+          },
+          {
+            "kodiThing": "Part_Dialog_Backing with Dimension_DialogFlipMenu / Dimension_DialogMiniMenu",
+            "harborChange": "Harbor uses fixed width/height on the context panel div: `w-[440px] max-w-[94vw] rounded-2xl border border-edge-soft/60 bg-surface/97`. No separate artwork vs. non-artwork dimension presets; the preview card is always on the left (hidden on mobile via `hidden self-center pe-4 lg:block`)."
+          },
+          {
+            "kodiThing": "SetProperty(TMDbHelper.ContextMenu,True) on dialog onload",
+            "harborChange": "Harbor doesn't use Kodi properties. Instead, it checks `state?.target.kind === 'meta'` in the ContextMenu component (line 177) to determine if a big panel should be shown. The state is managed via React context (lines 25-51 in lib/context-menu.tsx)."
+          },
+          {
+            "kodiThing": "Skin variables for labels and icons (e.g., $VAR[Label_SortMethod])",
+            "harborChange": "Harbor uses hardcoded action arrays built in JavaScript. The `actions` array (lines 224-269) defines all actions. Labels come from event handlers (e.g., 'Trakt options', 'Play', etc.) or from state (e.g., 'In watchlist' vs. 'Trakt options'). Icons from lucide-react library."
+          },
+          {
+            "kodiThing": "Kodi expressions and conditions ($EXP[...], String.IsEqual(...), etc.)",
+            "harborChange": "Harbor uses JavaScript conditionals: `if (state.target.kind === 'meta' && !playerActions)`, `if (canGoToHost)`, `targetMeta?.type === 'series'`, etc. Rendering is conditional on React state and derived values."
+          },
+          {
+            "kodiThing": "DialogView_Items (list of view/library options: View, Sort, Order, Filter, Search, Update Library, etc.)",
+            "harborChange": "Harbor's small popup menu for view targets (lines 398-410) is minimal—only 'Bring friends to X' for sessions. No direct equivalent to Arctic's detailed library options. Harbor assumes those are accessed via normal library UI, not context menu."
+          },
+          {
+            "kodiThing": "AlarmClock(..., SetFocus(...), 00:00, silent) - Deferred focus in onload",
+            "harborChange": "Harbor's `useEffect(..., [state, playerActions])` with `window.setTimeout(..., 40)` (lines 166-172). Same async focus delay, just using setTimeout instead of Kodi's AlarmClock."
+          },
+          {
+            "kodiThing": "grouplist with pagecontrol scrollbar (ID 61 in contextmenu)",
+            "harborChange": "Harbor's scrollable div: `flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto [scrollbar-width:none]` (lines 340-344). The `min-h-0` allows flex children to shrink below content size, enabling overflow. No explicit scrollbar ID; it's CSS-hidden."
+          },
+          {
+            "kodiThing": "Kodi's Close button positioned in header (Part_CloseButton)",
+            "harborChange": "Harbor's close button (lines 330-337): `<button type='button' onClick={close} aria-label={t('Close')} className='harbor-card-focus flex h-10 w-10 items-center justify-center rounded-full ...'>\n              <X size={22} />\n            </button>`. Same position (top-right of panel), similar styling."
+          }
+        ]
+      },
+      {
+        "dimension": "tmdbhelper: Info dialogs, ratings aggregation, similar/recommended content, cast/crew widgets, Trakt sync/watchlist/favorites overlays",
+        "howItWorks": "Arctic Fuse uses tmdbhelper (a Kodi plugin) to enrich listitem metadata at focus/selection time. When a user focuses a video card, the plugin fetches TMDB data and populates Window(Home).Property(TMDbHelper.*) properties. The skin then conditionally renders: (1) an expanded info panel on the left showing ratings (Trakt, IMDb, RT, Metacritic, TMDb, MDBList, Letterboxd), metadata (duration, premiere, status, awards), and styled pill-tags for video quality (4K/FHD/HD), HDR type, audio channels; (2) a right-side info dialog (window 1190) with poster, title, plot, and scrollable horizontal widget rows for Cast, Collection, Studio, Year, Seasons, Episodes, Director, Writer, Creator, Starring actors, Crew lists, Trailers, Reviews, and Recommendations. Each widget row pulls from TMDbHelper plugin endpoints (plugin://plugin.video.themoviedb.helper/?info=cast|collection|recommendations|stars_in_both|crew_in_both, etc.). Trakt integration adds: (a) watchlist/favorites rank properties (watchlist_rank, favorites_rank) rendered as 40x40px overlay icons (top-right, slide 48px down if both present); (b) a Trakt button in the info dialog's action tray that calls RunScript(plugin.video.themoviedb.helper,sync_trakt,tmdb_id=X,type=movie|tv,cache_refresh) to sync local and Trakt state; (c) Trakt auth check via Window(Home).Property(TMDbHelper.TraktIsAuth). All data sourcing is deferred (only fetched when dialog has focus) and cached client-side by the plugin. Context menu exposes Plot, Wiki, Related Lists, Trailer, and Add-to-Favorites via Dialog_DialogContextMenu.xml, which reads base properties like TMDbHelper.ListItem.base_plot, base_poster, base_dbtype.",
+        "keyBehaviors": [
+          {
+            "behavior": "Info Dialog Launch",
+            "detail": "Focus on a video card → onload fires ClearProperty(Background.HideArtwork) in window 1190 → poster slides in from right (160px, 400ms cubic-out easing, 200ms delay) → info panel slides in from left (160px, 400ms) → widgets group below fades in (1000ms delay default). Dialog animates on unfocus with reverse slide-out."
+          },
+          {
+            "behavior": "Widget Row Navigation",
+            "detail": "Up/down d-pad scrolls vertical grouplist of widget rows. Each widget is a horizontal list (List_Poster_Row or List_Landscape_Row) with SetFocus triggers that set Window.Property(CurrentID) to manage which widget is active. Widgets with altvisible show only when CurrentID != BaseID, preventing duplicate display when focused."
+          },
+          {
+            "behavior": "Ratings Display",
+            "detail": "Info_Meta_Ratings conditionally renders 1-3 rating pills per row (40px tall), spaced 12px apart, showing Metacritic (%), RT User/Critic, Trakt (/10), IMDb (with Top250 if present), TMDb (/10), MDBList (%), Letterboxd. Each pulls from Window(Home).Property(TMDbHelper.ListItem.XXX_Rating). Visible only if value is non-empty and enabled via Skin.String(CustomRating.Movies/TVShows.Item0X). Pill styling: 60px wide auto-text, 2a2a2a text on color-diffuse bg (90% alpha)."
+          },
+          {
+            "behavior": "Trakt Watchlist/Favorites Overlay",
+            "detail": "Object_TraktOverlays renders two 40x40 icon groups (top-right of posters) with 12px margin. Watchlist icon visible if Skin.HasSetting(Indicator.TraktWatchlist) + !String.IsEmpty(ListItem.Property(watchlist_rank)). Favorites icon slides down 48px only if both present, conditional animation time=400ms. Icons are 40x40 with textures flags/color/trakt/watchlist.png and favorite.png."
+          },
+          {
+            "behavior": "Trakt Sync Action",
+            "detail": "Trakt button in dialog (id=1172) closes dialog then fires $VAR[Action_Sync], which runs RunScript(plugin.video.themoviedb.helper,sync_trakt,tmdb_id=X,type=movie|tv,season=Y,episode=Z,cache_refresh). Button only visible if !String.IsEmpty(Window(Home).Property(TMDbHelper.TraktIsAuth)) + Exp_TMDbHelper_IsData."
+          },
+          {
+            "behavior": "Recommendations/Similar Load",
+            "detail": "Recommendations widget (id=16) populates from Path_VideoInfo_OnlineRecommendations, which is plugin://plugin.video.themoviedb.helper/?info=recommendations&nextpage=false&cacheonly=true&length=1&tmdb_type=movie&tmdb_id=X. Only loads when widget container (ControlGroup 5000) has focus, triggered by ondown from main panel."
+          },
+          {
+            "behavior": "Cast/Crew Filtering",
+            "detail": "Cast widgets pull from Path_VideoInfo_OnlineCast (plugin://plugin.video.themoviedb.helper/?info=cast&...). Creator/Director/Writer crew items hardcoded as 10 items max from Window(Home).Property(TMDbHelper.ListItem.Creator.1.Name) etc., with filter support for department/job (e.g., filter_key=job&filter_value=Director). First actor/director also shown in a 'starring' widget."
+          },
+          {
+            "behavior": "Context Menu Trakt Actions",
+            "detail": "Dialog_DialogContextMenu.xml has no explicit Trakt item (unlike Wikipedia/Plot/Trailer), but related_lists item calls RunScript(plugin.video.themoviedb.helper,related_lists,query=X,tmdb_type=Y) to show Trakt lists. The manage watchlist/favorites is done via the main info dialog Trakt button, not the context menu."
+          }
+        ],
+        "concreteNumbers": [
+          "399ms WindowOpen/Close fade delay (line 7-8 Includes_DialogInfo.xml)",
+          "400ms slide animation (cubic-out easing, lines 18-28)",
+          "200ms slide delay",
+          "40px height for meta/ratings rows",
+          "12px item gap between rating pills",
+          "48px slide distance for favorites overlay",
+          "60px default pill width",
+          "30000ms disc art rotation loop",
+          "44px star rating size",
+          "32px language flag width/height",
+          "880px widget group vertical slide distance",
+          "quadratic tween for 400ms widget show/hide slide",
+          "100-43% fade for disabled controls",
+          "1ms animation time (instant) for conditional fades",
+          "560px poster width (diffuse/poster_w560_h820.png)",
+          "520px left-side info panel content width"
+        ],
+        "harborMapping": [
+          {
+            "kodiThing": "Window(Home).Property(TMDbHelper.ListItem.XXX_Rating), Window(Home).Property(TMDbHelper.ListItem.Trakt_Rating), etc.",
+            "harborChange": "Store TMDB/Trakt/IMDb/RT/Metacritic ratings in a CardMetadata.ratings object keyed by source (rating system). Fetch via tmdb API + Trakt API on card focus (cache with React Query or SWR). Pass to <RatingsDisplay /> component that maps rating sources to pill icons/colors."
+          },
+          {
+            "kodiThing": "Window(Home).Property(TMDbHelper.ListItem.Set.Name), Path_VideoInfo_OnlineCollection plugin path",
+            "harborChange": "When a Card has a collection (movie.collection_id in TMDB response), render a CollectionWidget displaying related movies. Fetch via tmdb/movie/{id}/similar or tmdb/movie/{id}/recommendations. Use a horizontal HScroll carousel (similar to Arctic's List_Poster_Row). Trigger load on widget container focus."
+          },
+          {
+            "kodiThing": "Window(Home).Property(TMDbHelper.ListItem.Cast.1.Name/Role/Thumb), Path_VideoInfo_OnlineCast, DialogInfo_CrewItems",
+            "harborChange": "Build CastCard[] and CrewCard[] arrays from TMDB /movie/{id}/credits and /tv/{id}/aggregate_credits. Store first 10 cast members + filtered crew (Director, Writer, Creator, Producer, DP, Editor, Sound, Art). On card focus, render CastWidget with horizontal scrolling HScroll. Each cast item is clickable to open person detail modal or navigate to person page."
+          },
+          {
+            "kodiThing": "ListItem.Property(watchlist_rank), ListItem.Property(favorites_rank), Object_TraktOverlays 40x40 overlay icons",
+            "harborChange": "Add TraktBadges component to each Card: if card.trakt?.watchlist_rank, render watchlist icon (40x40, top-right). If card.trakt?.favorites_rank, render heart icon below with 48px slide-in animation (CSS animation or Framer Motion). Icons fetch from Trakt API on card mount using useEffect + Trakt.getUserList(). Badge updates on Trakt sync."
+          },
+          {
+            "kodiThing": "RunScript(plugin.video.themoviedb.helper,sync_trakt,tmdb_id=X,type=movie,cache_refresh)",
+            "harborChange": "Implement useTraktSync() hook that calls POST trakt.tv/sync/collection and trakt.tv/sync/watchlist with authentication. Trigger on clicking the TraktSyncButton (blue button with trakt icon in info panel). Disable button if !traktAuth (equivalent to Exp_TMDbHelper_IsData check). Show spinner during sync. Invalidate Cache on success."
+          },
+          {
+            "kodiThing": "Path_VideoInfo_OnlineRecommendations plugin://plugin.video.themoviedb.helper/?info=recommendations&tmdb_id=X&tmdb_type=movie",
+            "harborChange": "RecommendationsWidget component: fetch tmdb/movie/{id}/recommendations or tmdb/tv/{id}/recommendations. Render as horizontal carousel. Show only when InfoPanel is focused (use focus context). Lazy-load: trigger query only when widget scrolls into view or gets focus via spatial nav."
+          },
+          {
+            "kodiThing": "Dialog_DialogContextMenu with related_lists, Plot, Wiki, Trailer items; Window(Home).Property(TMDbHelper.ListItem.base_dbtype) checks",
+            "harborChange": "ContextMenu component with <MenuItem>s: Plot (opens PlotModal), Wikipedia (external link with script.wikipedia params), Trailer (opens VideoPlayer), Related Lists (opens relatedListsDialog). Filter visibility by dbtype (movie/tvshow/season/episode). Handle with Context API or Zustand for menu state."
+          },
+          {
+            "kodiThing": "DialogInfo_Animation_Left slide with 160px posx, 400ms time, 200ms delay, cubic-out easing; DialogInfo_Widget_Group slide 0,-880 in 400ms quadratic",
+            "harborChange": "InfoPanel entry animation: Framer Motion <motion.div initial={{x: -160}} animate={{x: 0}} transition={{duration: 0.4, delay: 0.2, easing: 'easeOut'}} />. Widgets group: <motion.div initial={{y: 880}} animate={{y: 0}} transition={{duration: 0.4, easing: 'easeInOut'}} />. UnFocus reverses with exit animations."
+          },
+          {
+            "kodiThing": "Dimension_Info, info_title_w, info_title_h, infodialog_poster_w/h constants",
+            "harborChange": "Define CSS custom properties for layout: --info-panel-width: 520px, --poster-width: 560px, --poster-height: 820px, --meta-row-height: 40px. Use in Tailwind @apply or CSS Grid for responsive info panel layout. On mobile, use flexbox column; on desktop, two-column (poster left, info right)."
+          },
+          {
+            "kodiThing": "Indicator.TraktWatchlist, Indicator.TraktFavourites skin settings toggle",
+            "harborChange": "UserPreferences context/store: traktWatchlistVisible: boolean, traktFavoritesVisible: boolean. Toggleable via settings modal. Defaults to true. Pass to TraktBadges to show/hide icons. Persist to localStorage or user account settings."
+          }
+        ]
+      },
+      {
+        "dimension": "info-dialog",
+        "howItWorks": "Arctic Fuse 3's info dialog is a D-pad-driven detail view with conditional focus routing and layered visibility toggles. The layout has a fixed right sidebar (poster + details panel) and a main content area (title + plot + ratings). Below is a widget carousel. When the widget carousel (ID 5000) gains focus, the entire main content panel (zoom 100%->85%, fade 100%->0%) and slides the widgets up 880px, creating a two-view modal flip. The action buttons (Play, Trailer, Watchlist, etc.) are a horizontal grouplist with 40px gaps. All focus transitions are smooth (300-400ms cubic/quadratic/sine tweens). The focus routing is conditional: navigation changes based on whether the item is a movie vs person vs episode, enabling context-aware button availability and navigation targets.",
+        "keyBehaviors": [
+          {
+            "behavior": "Primary action row (Play/Actions)",
+            "detail": "Horizontal grouplist (ID 9000) with 5 conditional buttons: Play (ID 4001), Action1-3 (IDs 4002-4004), Options (ID 4005). Buttons auto-size to text width with 40px horizontal gap. Focus ring is underline that appears beneath text. Font is font_main_bold, 57px tall. Button text color is dialog_fg_30 (unfocused, ~30% opacity) to dialog_fg_100 (focused, bright). On focus, button icon slides up 10px and text color brightens. ondown from here goes to details panel (9100) or widgets (5000). onup loops back to title (8000)."
+          },
+          {
+            "behavior": "Main content zoom-out on widget focus",
+            "detail": "When widget grouplist (ID 5000) gains focus, the entire main content area (poster + details + title + plot) undergoes simultaneous animations: zoom 100%->85% + fade 100%->0% in 300ms using sine easing out. This is managed by Dialog_Main_Group visibility condition: !ControlGroup(5000).HasFocus(). Reverse animation (85%->100%, 0%->100%) triggers on 300ms sine easing in with 200ms delay when focus leaves widgets."
+          },
+          {
+            "behavior": "Widget carousel slide-up",
+            "detail": "Widget grouplist (ID 5000) occupies top:880, bottom:-880 (total 1080p below main content). When it gains focus, animation slides it up by 880px in 400ms using quadratic tween, bringing it to fill the screen. When focus leaves, it slides back down. The animation is reversible=false and only activates on Conditional animation type. This creates the flip-between-views effect."
+          },
+          {
+            "behavior": "Focus routing matrix",
+            "detail": "Up arrow: varies by current location. From action buttons->title; from details->action buttons; from widgets->title. Down arrow: from title->action buttons; from action buttons->details or widgets. Left/Right: cycles through buttons in action row (grouplist native horizontal navigation). Back button: from any widget->title (explicit onback routing). Conditional branches: if ListItem.Property(tmdb_type)==person, onleft/onright from title activate window 1113 (external); otherwise route to action buttons (4001)."
+          },
+          {
+            "behavior": "Conditional button availability",
+            "detail": "Buttons 4002-4004 appear/disappear based on $INFO[Container(4900).ListItemAbsolute(N).Label] (a hidden list of configured actions). Movies get 3 buttons (often Trailer, Trakt, Plot); TV shows get different buttons (Watch, Unwatched, Trakt). Buttons render only if label is not empty. On click, they SetFocus(4900,N,absolute), Action(select), then SetFocus back to button, ensuring focus returns after action."
+          },
+          {
+            "behavior": "Details panel (right sidebar)",
+            "detail": "Vertical grouplist (ID 9100) at right: 480px wide, right-aligned. Contains genres, directors, cast, etc. onup goes to action buttons (9000). onleft/onright connects to main details grouplist (9100). No horizontal scrolling; it's a static details column next to the dynamic main content."
+          },
+          {
+            "behavior": "Window entrance animation",
+            "detail": "On dialog open: Main content slides left 160px (start position) with cubic out easing over 400ms + 200ms delay. Poster slides right 160px over same duration. Widgets slide down 160px. Creates a coordinated entrance where everything moves inward from edges. On close, same animations reverse."
+          }
+        ],
+        "concreteNumbers": [
+          "Poster width: 560px",
+          "Poster height: 820px",
+          "Details panel width: 480px",
+          "Main content area width: ~720px (1920 - 560 poster - 80 padding right - 480 details - 80 padding left)",
+          "View padding (horizontal): 80px",
+          "View top padding: 180px",
+          "Title height: 140px",
+          "Action buttons height: 57px",
+          "Action buttons itemgap: 40px",
+          "Action buttons font: font_main_bold",
+          "Plot height (video): 120px",
+          "Plot height (person): 560px",
+          "Details panel height: 320px",
+          "Widget carousel initial offset: 880px below screen",
+          "Widget carousel slide-up distance: 880px",
+          "Main content zoom range: 85% (min) to 100% (max)",
+          "Main content fade range: 0% to 100%",
+          "Focus zoom animation time: 300ms",
+          "Focus zoom animation easing: sine out/in",
+          "Focus fade animation time: 300ms",
+          "Focus fade animation easing: sine out/in",
+          "Widget slide animation time: 400ms",
+          "Widget slide animation easing: quadratic",
+          "Window entrance animation time: 400ms",
+          "Window entrance animation easing: cubic out",
+          "Window entrance animation delay: 200ms",
+          "Window entrance slide distance: 160px (left/right/down)",
+          "Icon focus animation: 10px up slide (immediate)",
+          "Button text color (unfocused): dialog_fg_30",
+          "Button text color (focused): dialog_fg_100",
+          "Button underline border: 10px",
+          "Fade delay on window open: 399ms",
+          "Button spacing (vertical grouplist): 0px itemgap",
+          "Details panel right margin: 80px"
+        ],
+        "keyFiles": [
+          "/tmp/arctic-fuse-3/1080i/DialogVideoInfo.xml",
+          "/tmp/arctic-fuse-3/1080i/Includes_DialogInfo.xml",
+          "/tmp/arctic-fuse-3/1080i/Includes_Info.xml",
+          "/tmp/arctic-fuse-3/1080i/Includes_Constants.xml",
+          "/tmp/arctic-fuse-3/1080i/Includes_Buttons.xml",
+          "/tmp/arctic-fuse-3/1080i/Includes_Animations.xml",
+          "/tmp/arctic-fuse-3/1080i/Includes_Textures.xml"
+        ],
+        "harborMapping": [
+          {
+            "kodiThing": "D-pad navigation (onup/ondown/onleft/onright)",
+            "harborChange": "Replace with src/lib/spatial-nav.ts geometric focus routing. Calculate focus targets at runtime based on button/card positions and DOM tree. Arrow keys invoke setFocus() to adjacent elements."
+          },
+          {
+            "kodiThing": "Conditional focus routes (if tmdb_type)",
+            "harborChange": "Store item metadata in React state. useEffect hook recalculates spatial-nav targets when item type changes. Use data attributes on focusable elements to mark their role and type-specific focus targets."
+          },
+          {
+            "kodiThing": "ID-based focus control (SetFocus(9000), SetFocus(5000))",
+            "harborChange": "Assign unique id/data-focus-id to all focusable React components. Create a FocusRegistry singleton that maps IDs to element refs. Call FocusRegistry.setFocus(id) to move focus programmatically."
+          },
+          {
+            "kodiThing": "Grouplist orientation (horizontal/vertical)",
+            "harborChange": "Use CSS flexbox direction (row/column) on button container. Spatial-nav will auto-detect orientation via getBoundingClientRect. No explicit config needed if layout is semantically correct."
+          },
+          {
+            "kodiThing": "Animation_Zoom_In/Out (fade + zoom combo, 300ms sine)",
+            "harborChange": "Create CSS @keyframes zoom-fade-in (0% opacity 0% scale 85%, 100% opacity 100% scale 100%) with animation: 300ms cubic-bezier(0.43, 0.13, 0.23, 0.96) (sine out). Apply via conditional className when ControlGroup(5000).HasFocus() state changes."
+          },
+          {
+            "kodiThing": "Slide animation on widget grouplist (880px, 400ms quadratic)",
+            "harborChange": "Use CSS transform: translateY(-880px) with transition: 400ms cubic-bezier(0.5, 0, 0.5, 1) (quadratic). Toggle class when focusGroup === 'widgets'. Hardware accelerate with will-change: transform."
+          },
+          {
+            "kodiThing": "Window entrance animation (slide + delay)",
+            "harborChange": "Use CSS animation with 200ms delay on each of main-content, poster, widgets. Animate from initial transform-translateX/Y(160px) to translateX/Y(0) in 400ms cubic-bezier(0.63, 0.03, 0.36, 0.97) (cubic out)."
+          },
+          {
+            "kodiThing": "Button underline focus highlight",
+            "harborChange": "Render <div className=\"focus-underline\"> beneath button text. Apply box-shadow: inset 0 -2px 0 0 [highlight-color] on :focus-visible state. Use filter: brightness(1.5) on text color to match dialog_fg_100 brightening."
+          },
+          {
+            "kodiThing": "itemgap spacing (40px horizontal, 0px vertical)",
+            "harborChange": "Use CSS gap property on flexbox. .action-buttons { display: flex; gap: 40px; } and .details-panel { display: flex; flex-direction: column; gap: 0; }"
+          },
+          {
+            "kodiThing": "Poster fixed-width sidebar (560px)",
+            "harborChange": "Use CSS position: fixed right: 80px; width: 560px; or use CSS Grid with explicit column widths. Ensure it does NOT participate in document flow; main content should not wrap around it."
+          },
+          {
+            "kodiThing": "Details panel (480px, vertical scroll)",
+            "harborChange": "Use position: absolute right: 80px; width: 480px; max-height: 320px; overflow-y: auto. OR use CSS Grid. Ensure focus can navigate into it (onleft/onright from action buttons)."
+          },
+          {
+            "kodiThing": "Container(4900) hidden list (action button sources)",
+            "harborChange": "Create a hidden <div id=\"action-buttons-source\"> with data-* attributes containing button labels, icons, onclick handlers. Use a reducer to populate from config. Spatial-nav ignores hidden elements, but CSS selectors can read their content via attr() in ::before/::after."
+          },
+          {
+            "kodiThing": "Conditional visibility (!String.IsEqual(ListItem.Property(tmdb_type),person))",
+            "harborChange": "Use React conditional rendering: {itemType !== 'person' && <ActionButton ... />}. Or use CSS display: none with data attributes."
+          },
+          {
+            "kodiThing": "Font styling (font_main_bold, dialog_fg_30/100)",
+            "harborChange": "Use CSS custom properties: --font-main-bold for font-family/weight, --color-dialog-fg-30 and --color-dialog-fg-100 for text colors. Define in theme CSS. Button gets color: var(--color-dialog-fg-30); button:focus-visible { color: var(--color-dialog-fg-100); }"
+          },
+          {
+            "kodiThing": "Plot textbox (wrap-text, vertical scroll within bounds)",
+            "harborChange": "Use CSS white-space: pre-wrap or word-break: break-word on <p> or <div>. Apply max-height and overflow-y: auto. Font: var(--font-main-plot). Color: var(--color-dialog-fg-70)."
+          }
+        ]
+      },
+      {
+        "dimension": "search",
+        "howItWorks": "Arctic Fuse 3's search uses a remote-first, spatially-driven focus model with four distinct layers: (1) a text input field at the top center (Control 3000), (2) a horizontal on-screen keyboard wraplist below it (Control 301) displaying A-Z letters plus underscore and backspace, (3) discovery/results content displayed as horizontal poster rows (Containers 501, 601, 602), and (4) a horizontal widget switcher/filter bar (Control 600) for selecting result types. Focus flows vertically between layers via onup/ondown handlers and horizontally within layers. Letter selection in the keyboard immediately updates the search query; the input focus automatically advances focus down to results on pressing down. All transitions use fade animations and smooth scrolling. The design prioritizes remote D-pad usability with explicit navigation targets.",
+        "keyBehaviors": [
+          {
+            "behavior": "Input field focus → Down D-pad",
+            "detail": "From search input (ID 3000), pressing down focuses the keyboard (ID 301) immediately below. Input field shows outlined backing panel when unfocused (menu.png border 40px), highlight panel when focused (ColorHighlight white border)."
+          },
+          {
+            "behavior": "Keyboard rapid selection",
+            "detail": "Horizontal wraplist (ID 301) contains 27 items (A-Z, underscore, backspace). Each letter on click: focuses input, executes script to append letter to query, returns focus to keyboard. Focus position is always item 7 (centered). Selected letter shown bold with white underline bar (scrollbar texture, height 10px, 5px from bottom)."
+          },
+          {
+            "behavior": "Keyboard → Results transition",
+            "detail": "Pressing down from keyboard (ID 301) routes to results (ID 601 in combined mode, ID 602 in standard). Container 601 is discover widget; containers in group 500 show as horizontal poster rows. When results focus gained, widget switcher (ID 600) appears below for filtering."
+          },
+          {
+            "behavior": "Results layout & scrolling",
+            "detail": "Poster rows use fixedlist horizontal layout, 6 visible items per row (view_poster_movement=6). Each poster is 217.14px wide x 310px tall. Items arranged with 80px horizontal offset (view_offx), 80px padding around. Scroll animation: 400ms quadratic tween. Focused item shown with white highlight box (border 20px)."
+          },
+          {
+            "behavior": "Widget switcher for filters",
+            "detail": "Below results, horizontal filter tabs (ID 600) let user switch between movies/shows/actors/etc. Each tab (Container 601 items) shows result count. Only visible when results container has items. onup from switcher goes to results; onup from results goes to keyboard."
+          },
+          {
+            "behavior": "No-results messaging",
+            "detail": "When all result containers are empty (Container 601 NumItems=0 AND Container 602 NumItems=0), displays centered text at top 280px with fade-in animation (400ms delay 200ms). Message includes two lines: bold title, description text."
+          },
+          {
+            "behavior": "Focus animations",
+            "detail": "All visible/hidden transitions use fade effect: fade in 0→100% over 400ms with 200ms delay; fade out 100→0% over 200ms. List item focus uses conditional fade toggle showing focused layout (bold, highlight) vs unfocused layout."
+          },
+          {
+            "behavior": "Bumper spring effect",
+            "detail": "When navigating between major sections (input to keyboard, keyboard to results), a subtle bounce animation plays: 60ms slide out, then 180ms slide back with sine tween. Creates tactile confirmation without disrupting focus flow."
+          }
+        ],
+        "concreteNumbers": [
+          "input field: 800px wide x 80px tall, centered vertically (centertop 50%)",
+          "keyboard wraplist: 750px x 100px, top 95px from viewport top, centered left (50%)",
+          "keyboard items: 50px x 50px each, 27 total items, focusposition 7 (center)",
+          "keyboard focus underline: 10px height, border 4px, positioned 5px from bottom, width 75% of item",
+          "poster item: 217.14px wide x 310px tall",
+          "poster itemlayout: 257.14px wide x 350px tall (includes 40px padding)",
+          "horizontal padding: 80px (view_offx)",
+          "vertical padding: 80px (offset_y in lists)",
+          "results container top margin: 80px (view_offx used as left/right offset)",
+          "no-results text position: top 280px, second line top 360px",
+          "list scroll animation: 400ms with quadratic tween",
+          "fade in animation: 400ms with 200ms delay, cubic easing out",
+          "fade out animation: 200ms cubic easing out",
+          "focus highlight box border: 20px rounded",
+          "bumper spring animation: 60ms slide (sine tween) + 180ms recovery (sine tween)",
+          "poster row movement amount: 6 items visible per row",
+          "keyboard scroll bar height (scrollbar_w constant): 10px",
+          "input backing panel border: 40px"
+        ],
+        "keyFiles": [
+          "/tmp/arctic-fuse-3/1080i/Custom_1105_Search.xml",
+          "/tmp/arctic-fuse-3/1080i/Includes_Search.xml",
+          "/tmp/arctic-fuse-3/1080i/Includes_Lists.xml",
+          "/tmp/arctic-fuse-3/1080i/Includes_Layouts.xml",
+          "/tmp/arctic-fuse-3/1080i/Includes_Constants.xml",
+          "/tmp/arctic-fuse-3/1080i/Includes_Animations.xml",
+          "/tmp/arctic-fuse-3/1080i/Includes_Colors.xml",
+          "/tmp/arctic-fuse-3/1080i/Includes_Home.xml"
+        ],
+        "harborMapping": [
+          {
+            "kodiThing": "Kodi focus routing via onup/ondown/onleft/onright handlers",
+            "harborChange": "Implement in spatial-nav.ts: map D-pad to geometric focus targets. Input (3000) has explicit down→301, keyboard (301) has explicit down→601. Use focusTarget indices instead of Kodi's SetFocus() commands."
+          },
+          {
+            "kodiThing": "Search input Control 3000 (edit control) with backing panels",
+            "harborChange": "React input field with two background states: unfocused (outlined border) / focused (solid highlight). Use CSS :focus or onFocus handler to toggle classname. Border 40px rounded; colors from theme (white highlight, 12% foreground unfocused)."
+          },
+          {
+            "kodiThing": "Keyboard wraplist (ID 301) with 27 items, focusposition 7",
+            "harborChange": "Build as horizontal flex grid of button/div elements. Center focus position via transform or scroll-into-view. Keyboard items are 50x50px; container 750w keeps ~7 visible at once (7 items at 50px + gaps). Set data-focusable=true on each letter button."
+          },
+          {
+            "kodiThing": "Keyboard item focus visual: bold text + underline bar",
+            "harborChange": "CSS: focused state uses font-weight bold, adds border-bottom (10px height, highlight color). Position underline 5px from bottom using padding-bottom or margin. Unfocused items use gray text (main_fg_30)."
+          },
+          {
+            "kodiThing": "Poster rows (List_Poster_Row) with 217.14w x 310h items",
+            "harborChange": "Build card components 217px x 310px. Use CSS Grid or flex for rows. Set focusable=true. Focused card: border or box-shadow (20px equiv in outline-offset/box-shadow). Scrolling: scroll-behavior smooth, transition 400ms quadratic."
+          },
+          {
+            "kodiThing": "List scroll animation: 400ms quadratic tween",
+            "harborChange": "CSS: scroll-behavior smooth + transition on transform. JavaScript: use requestAnimationFrame or CSS animation with cubic-bezier(0.25, 0.46, 0.45, 0.94) for quadratic easing. Apply to container scroll or item translation."
+          },
+          {
+            "kodiThing": "Fade visibility animations: 400ms in (delay 200ms), 200ms out",
+            "harborChange": "CSS: @keyframes fadeIn { 0% { opacity: 0 } 100% { opacity: 1 } } at 400ms. Use animation-delay: 200ms. Unfading: @keyframes fadeOut at 200ms. Apply via JS class toggle or opacity CSS variable."
+          },
+          {
+            "kodiThing": "Bumper spring bounce: 60ms slide + 180ms recovery",
+            "harborChange": "CSS animation: @keyframes bump { 0% { transform: translateY(0) } 50% { transform: translateY(-20px) } 100% { transform: translateY(0) } }. Total 240ms (60+180). Use cubic-bezier for sine easing. Trigger on focus-layer transition."
+          },
+          {
+            "kodiThing": "Widget switcher horizontal tabs (ID 600) for content filtering",
+            "harborChange": "Build as horizontal tab/button list. Each tab has onclick handler that filters results. Use data-container-id to map to results container 601/602. Focused tab: bold, highlight underline. Tab onup goes to results (onup=302 maps to results container)."
+          },
+          {
+            "kodiThing": "No-results state: conditional visibility + fade message",
+            "harborChange": "React component: show message div only when both containers empty (numItems === 0). Use CSS opacity + transition 400ms for fade. Position at top 280px. Two text lines: bold title (font-weight bold) + gray description (color main_fg_30)."
+          },
+          {
+            "kodiThing": "Focus within horizontally scrolling list",
+            "harborChange": "On focus-change, scroll focused element into view. Use element.scrollIntoView({ block: 'nearest', inline: 'center' }) or calculate scroll offset manually. Ensure focusposition 7 stays visible (center of 750px container = 375px)."
+          },
+          {
+            "kodiThing": "Explicit focus navigation chain",
+            "harborChange": "spatial-nav.ts: Define 4-point focus graph. Input (3000) → down: Keyboard (301). Keyboard → up: Input, down: Results (601). Results → up: Keyboard, right/left: within row. Filters (600) → up: Results. Set nextFocus: { up: id, down: id } on each element."
+          }
+        ]
+      },
+      {
+        "dimension": "hub-home",
+        "howItWorks": "Arctic Fuse 3's home navigation is a multi-layer remote-first system built on Kodi's XML event model. The primary interaction hub is Control 300 (the main menu button), which sits at the top and manages focus routing to a hidden horizontal menu list (Container 399). When users press UP from this menu, Kodi activates Window 1181 (Submenu dialog), displaying a vertical list of contextual menu items specific to the current hub (Home, Movies, TV, etc.). Window 1182 (Topmenu_Overlay) is a persistent overlay showing the current menu switcher with icons and highlight states. The system uses \"Bumper.Direction\" properties to track D-pad intent before executing complex multi-step focus routing. Navigation patterns differ between horizontal mode (menu at top, widgets below) and vertical mode (menu at left, widgets to the right). All transitions use conditional animations triggered by property changes and container states. The spotlight feature (Container 301) is a horizontally-scrolling carousel that slides down/up based on focus state and visibility. Widget rows (Containers 5xx) are arranged vertically in a grouplist (Container 602), and users navigate between rows, the widget category switcher (Container 601), and back to the menu using UP/DOWN/LEFT/RIGHT arrows.",
+        "keyBehaviors": [
+          {
+            "behavior": "Main Menu Switcher (Control 300)",
+            "detail": "Central focus hub with left/right navigation cycling through menu items via Container 399. Each item (Search, Home, 1101-1108) is a property-based action trigger. When focused, shows full-screen highlighted state with background overlay fade."
+          },
+          {
+            "behavior": "Submenu Dialog (Window 1181)",
+            "detail": "Triggered by UP or INFO key from menu. Opens a modal dialog containing a vertical list (Container 80XX) of submenu items. Has onload logic to set focus based on active window (Home=7000, 1101=7001, etc). Closes via LEFT/RIGHT navigation or BACK key. Width 560px, height 880px with conditional repositioning for vertical mode."
+          },
+          {
+            "behavior": "Topmenu Overlay (Window 1182)",
+            "detail": "Persistent transparent overlay showing current menu switcher state. Displays horizontal menu in normal mode or vertical sidebar icons in vertical mode. Fades in/out (200-400ms) based on HomeSwitcher.IsVisible property. Shows icon highlights based on active window and current control state."
+          },
+          {
+            "behavior": "Spotlight Carousel (Container 301)",
+            "detail": "Horizontal wraplist with quadratic 400ms scrolltime. Auto-hides menu switcher via fade animation when focused. Slides down 260px or up based on focus and menu visibility. Contains circular button controls for play/info actions. Only visible when container has items."
+          },
+          {
+            "behavior": "Widget Rows (Containers 5XX-6XX)",
+            "detail": "Vertical grouplist layout with multiple display modes (Standard, Wall, Combined). Focus on widgets clears the menu switcher visibility and hides background overlay. UP from widgets returns to menu or spotlight. DOWN goes to bottom menu overlay (1180). Rows auto-scroll left/right through categories via Container 601 switcher."
+          },
+          {
+            "behavior": "Focus Routing with Bumper Direction",
+            "detail": "Complex navigation uses SetProperty(Bumper.Direction,Up/Down/Left/Right,Home) before opening dialogs. This stores intent to be consumed by dialog logic. Prevents focus loss during dialog transitions and enables multi-key sequences to execute atomically."
+          },
+          {
+            "behavior": "Vertical vs Horizontal Mode",
+            "detail": "Skin.HasSetting(HomeSwitcher.Vertical) switches entire layout. Horizontal: menu at top, full widgets below. Vertical: menu as 80px left sidebar with icons + gaps, main content slides right when menu visible, submenu panel slides from left with repositioning animations based on item count."
+          },
+          {
+            "behavior": "Animation Conditional Triggers",
+            "detail": "All visible/hidden animations keyed to properties and container states. E.g., Home_Switcher fades/slides based on HomeSwitcher.IsVisible property. Spotlight slides based on ControlGroup(310).HasFocus() and Window.Property(TMDbHelper.WidgetContainer) values. No explicit animation triggers—all driven by state expressions."
+          }
+        ],
+        "concreteNumbers": [
+          "400ms cubic easing for main menu fade/slide transitions",
+          "200ms cubic easing for submenu overlay fade in/out",
+          "300ms delay before submenu panel visible animation",
+          "150ms delay for submenu slide in animation",
+          "400ms delay for submenu window-open animation",
+          "400ms quadratic easing for spotlight carousel scrolltime (horizontal smooth scrolling)",
+          "260px vertical slide distance for spotlight panel transitions",
+          "240px vertical slide distance for spotlight-triggered window content shifts",
+          "80px width and height for menu icons/buttons",
+          "40px width and height for nested icon images within buttons",
+          "20px itemgap between vertical menu icons",
+          "560px width for submenu dialog panel",
+          "880px max height for submenu items (8 items × 80px + padding + scrollbar)",
+          "70px conditional slide for disabled header repositioning",
+          "90px conditional slide for disabled search repositioning",
+          "440px slide distance for spotlight panel expand/collapse",
+          "200ms fade duration for spotlight label dimming when menu visible"
+        ],
+        "harborMapping": [
+          {
+            "kodiThing": "Control 300 (menu button)",
+            "harborChange": "React button component with spatial-nav focus target, managed by geometric spatial-nav.ts. Styled with CSS focus ring (border or box-shadow). OnClick/OnFocus handlers update component state to track menu visibility and manage downstream focus."
+          },
+          {
+            "kodiThing": "Container 399 (hidden menu list)",
+            "harborChange": "JavaScript Set or array holding menu item objects with action/label/icon/enabled flags. Not DOM-rendered; used as data source for spatial-nav navigation. LEFT/RIGHT handlers mutate selected index and trigger action property lookup."
+          },
+          {
+            "kodiThing": "Window 1181 (Submenu dialog) + Container 80XX (submenu list)",
+            "harborChange": "Modal <dialog> or overlay div with conditional visibility class. Menu items rendered as focusable <button> or <li> elements in a <ul>. Spatial-nav tracks focus within this list. CSS transitions replace animation blocks: fade 200-400ms ease-out, slide from top -48px with cubic-bezier back easing. SetFocus(n) → spatial-nav.focus(id)."
+          },
+          {
+            "kodiThing": "Window 1182 (Topmenu_Overlay) with Home_Switcher_Horz/Vert",
+            "harborChange": "Fixed position <aside> or <nav> overlay (z-index >= 10). Children are icon <button> elements. Visibility tied to state variable (Redux/Context) tracking HomeSwitcher.IsVisible property. CSS classes toggle fade/slide animations: opacity 0→1 400ms, transform slide-in 400ms cubic. Different layout (flexDirection: column for vertical, row for horizontal)."
+          },
+          {
+            "kodiThing": "Container 301 (Spotlight wraplist + scrolltime 400ms)",
+            "harborChange": "Horizontal scrollable <div> with overflow-x and snap-scroll or smooth-scroll CSS. Renders carousel items as cards. Spatial-nav moves left/right with smooth JS scrolling over 400ms (requestAnimationFrame). Use transform: translateX() for hardware-accelerated scroll. scrollBehavior: smooth replaces quadratic tween. Focus on spotlight triggers state change to update sidebar/menu overlay visibility."
+          },
+          {
+            "kodiThing": "Containers 5XX-6XX (widget rows + grouplist 602)",
+            "harborChange": "Grid or vertical flex layout of row containers. Each row is a scrollable horizontal section of cards. Container 602 is CSS grid with auto-rows or gap-based layout. Spatial-nav handles UP/DOWN through rows, LEFT/RIGHT within rows. Onfocus handlers update TMDbHelper.WidgetContainer property (use Context/Redux) to trigger secondary info panel visibility."
+          },
+          {
+            "kodiThing": "SetProperty(Bumper.Direction) + complex onload logic",
+            "harborChange": "State machine using Redux/Context or local component state. When dialog opens, dispatch action storing direction intent. Dialog onload checks intent and routes focus: if Up + Home visible → focus submenu item 7000, etc. This replaces Kodi's property system with React state & useEffect() hooks."
+          },
+          {
+            "kodiThing": "Conditional animation time= / tween= / easing=",
+            "harborChange": "CSS transitions and keyframes with var() for timing/easing. Main transitions: fade 400ms cubic-bezier(0.32, 0, 0.67, 0), slide 400ms cubic-bezier(0.68, -0.55, 0.265, 1.55) [back easing], spotlight scroll 400ms cubic-bezier(0.33, 0.66, 0.66, 1) [quadratic]. Use Framer Motion or CSS modules to apply conditional animations keyed to boolean state flags."
+          },
+          {
+            "kodiThing": "Skin.HasSetting(HomeSwitcher.Vertical) mode toggle",
+            "harborChange": "CSS media-query-like state or feature flag in Context. When active, apply layout transform: CSS grid switches from 1 column to 2 columns (sidebar + content). Sidebar becomes 80px fixed width, main content area flex-grows. Toggle via settings panel action, persist to localStorage/DB, trigger full layout re-render."
+          },
+          {
+            "kodiThing": "PreviousMenu / onback navigation",
+            "harborChange": "useNavigate() from React Router or custom history hook. onback translates to browser back button or a dispatch(closeDialog()). In spatial-nav, map BACK key to exit submenu dialog and restore focus to Control 300."
+          },
+          {
+            "kodiThing": "itemgap: 20, width: 80, height: 80 measurements",
+            "harborChange": "CSS Grid gap: 20px, button size width: 80px; height: 80px. Icon nested inside: width: 40px; height: 40px; margin: auto (center via flexbox). Border or borderRadius applied via Tailwind or SCSS mixin matching Kodi design (typically borderRadius: 4-8px for sharp, modern look)."
+          }
+        ]
+      }
+    ],
+    "spec": {
+      "navPrinciples": [
+        "Remote-first, every focusable is purposeful: Harbor already routes all arrow keys through src/lib/spatial-nav.ts (geometric pick(): forward + cross*2 scoring, requireOverlap for straight row travel). Keep that engine as the single source of truth; do not sprinkle onKeyDown handlers per component. Arctic mirror: explicit onup/ondown/onleft/onright on every control, but Harbor gets it for free from geometry.",
+        "Rows are hard stops, columns fall through: left/right end-of-row is a dead end (Arctic non-wrapping fixedlist), up/down always finds the next row or scrolls (spatial-nav.ts lines 144-152). This is already correct and should be preserved.",
+        "The focused item lives in a stable zone, not the edge: Arctic keeps the focused item at focusposition=2 (centered) and scrolls the strip under it. Harbor currently uses scrollIntoView({inline:'nearest'}) which parks items at the edge. Move to inline:'center' for horizontal rows so the strip glides under a fixed cursor.",
+        "Focus is always visible and always animated: Arctic never teleports focus; every move is a 300-400ms tween plus a 150ms lift on the item. Harbor must give the same tactile feedback so a remote user can see focus travel.",
+        "Boundaries are meaningful, not silent: Left on a deep page exits to sidebar/back (already in spatial-nav via data-harbor-page='deep' + Backspace-to-sidebar); a hard stop should give a bump, not nothing (Arctic bumper spring).",
+        "Entering the sidebar lands on the current tab (already implemented, lines 154-163); entering a page lands on a deliberate default control (Arctic <defaultcontrol>), and returning to a page restores the last-focused item (Arctic Container.CurrentItem memory) — this is the main missing piece.",
+        "Modals own focus: scopeRoot() already traps focus in the topmost [role=dialog]/[aria-modal] (lines 52-58); context-menu and search-overlay already set these attributes. Keep every overlay dialog-scoped.",
+        "Keep Harbor's look. Adopt Arctic's timings and interaction model (centering, bounce, wrap, memory), not its skin. Search in particular: change only its remote-drivability, never its visual layout."
+      ],
+      "animationSpec": [
+        "Add easing tokens to :root in src/index.css alongside the existing --ease-out (cubic-bezier(0.16,1,0.3,1)) and --ease-in-out (cubic-bezier(0.65,0,0.35,1)): --ease-quad: cubic-bezier(0.455,0.03,0.515,0.955) (Arctic quadratic scrolltime); --ease-sine-inout: cubic-bezier(0.445,0.05,0.55,0.95) (Arctic focus bounce); --ease-back-out: cubic-bezier(0.34,1.56,0.64,1) (Arctic dialog/back tween).",
+        "Focus bounce (Arctic Animation_FocusBounce, 150ms): @keyframes harbor-focus-bounce { 0% { transform: scale(0.965); } 100% { transform: scale(1); } } applied on .harbor-card-focus:focus-visible for 150ms var(--ease-sine-inout). Keep Harbor's existing inset ring + lift; do NOT copy Arctic's 20%->100% opacity fade (that was a two-layer swap Harbor doesn't need). Onscreen keyboard keys already do focus-visible:scale-110 — align them to the same 150ms token.",
+        "Row focus-scroll (Arctic scrolltime 400ms quadratic): when spatial-nav moves focus within a horizontal row, animate the strip over ~400ms with --ease-quad. Reuse row.tsx glideTo() (already a cubic ease-out, 280-620ms) but drive it from focus, targeting the centered position; clamp focus-driven glides to 300-400ms so remote travel feels consistent.",
+        "Dialog / info panel entrance (Arctic 400ms cubic-out, 200ms delay, 160px slide): reuse existing animate-modal-in (480ms var(--ease-out)) for context/info dialogs; for the two-stage title info dialog use scale 0.965->1 + opacity 0->1 over 400ms var(--ease-back-out).",
+        "Bumper spring at hard stops (Arctic 60ms out + 180ms back, ±20px, sine): @keyframes harbor-bump-x { 0% { transform: translateX(0);} 25% { transform: translateX(var(--bump,8px)); } 100% { transform: translateX(0);} } total ~240ms var(--ease-sine-inout); fire on the active element when pick() returns null. Scale Arctic's 1080-canvas 20px down to ~8px web px.",
+        "Context menu open: keep animate-popover-in (220ms var(--ease-out), already in index.css line 478) and the existing deferred first-item focus (context-menu.tsx line 168-169, setTimeout ~40ms to [data-cm-first]) — this already matches Arctic's AlarmClock deferred SetFocus.",
+        "Respect prefers-reduced-motion: wrap bounce/bump/glide in @media (prefers-reduced-motion: no-preference) and fall back to instant focus + scrollIntoView({behavior:'auto'})."
+      ],
+      "sizingSpec": [
+        "Treat Arctic's numbers as ratios, not pixels: Arctic is authored on a fixed 1920x1080 canvas; Harbor is fluid web/Tauri. Convert Arctic dimensions to rem/relative or keep the proportions, don't hardcode 1080-canvas px.",
+        "Focus ring: Arctic uses a 20px border ring with -3px inset on the 1080 canvas. Harbor already lands this correctly with inset box-shadow 0 0 0 2px accent@60% on .harbor-card-ring (index.css lines 713-721) plus outline:none on .harbor-card-focus:focus-visible. Keep as-is; do not widen to Arctic's literal 20px.",
+        "Center-focus offset: emulate Arctic focusposition=2 via scroll padding. Rows already use scroll-ps-5 scroll-pe-5 (20px, gap-5). For centered focus, scroll the focused card to inline:'center' rather than adding large scroll padding — cheaper and keeps the current visual gaps.",
+        "Context menu big panel: Harbor's 440px action panel + 300px preview card + 52px BigItem rows + 24px padding + 6px gaps already match Arctic's DialogContextMenu two-panel model (right list ~ Size_RightGroup, left artwork ~ DialogPlot_Artwork). No change needed — this dimension is already faithful.",
+        "Small popup menu: Harbor 220px wide, 36px (h-9) items — keep. Arctic's media tray (100px items, focusposition=2, horizontal) maps to Harbor's inline player actions; no separate tray needed.",
+        "Movement/visible-count: Arctic movement values (posters=6, cards=4, landscape=3, icons=8) control how many items shift per keypress. Harbor rows scroll one card per focus move with centering, which is the modern web equivalent; only adopt a multi-item jump if a row is very dense. Arrow-button scroll already pages by clientWidth (row.tsx line 305).",
+        "Search layout sizing is frozen: the onscreen keyboard (h-14 keys, w-14 / w-[92px] wide keys, 6-col grid, gap-2.5) and overlay stay visually identical. Only nav wiring changes."
+      ],
+      "prioritizedTasks": [
+        {
+          "title": "Center the focused card in horizontal rows (focusposition=2)",
+          "area": "src/lib/spatial-nav.ts (move(), lines 153-166)",
+          "whatToDo": "After best.focus(), choose scroll alignment by axis: for left/right moves inside a horizontal scroller use best.scrollIntoView({block:'nearest', inline:'center', behavior:'smooth'}); keep inline:'nearest' for vertical. Detect the horizontal case by checking the nearest scrollable-x ancestor (mirror scrollableAncestor() with overflowX). This makes the strip glide under a fixed focus cursor instead of parking cards at the viewport edge.",
+          "mirrors": "Arctic focusposition=2 keeping the focused item centered while the fixedlist scrolls under it (ButtonMenu.xml line 66)"
+        },
+        {
+          "title": "Add the 150ms focus-bounce to cards",
+          "area": "src/index.css (.harbor-card-focus:focus-visible, near lines 723-727)",
+          "whatToDo": "Add @keyframes harbor-focus-bounce (scale 0.965 -> 1) and apply animation: harbor-focus-bounce 150ms var(--ease-sine-inout) on .harbor-card-focus:focus-visible, guarded by prefers-reduced-motion. Keep the existing inset ring + hover lift untouched so Harbor's look is preserved; this only adds the tactile 'lift' on remote focus. Align onscreen-keyboard.tsx keys (currently focus-visible:scale-110) to the same keyframe/timing.",
+          "mirrors": "Arctic Animation_FocusBounce: zoom 96.5%->100% over 150ms sine inout (Includes_Animations.xml)"
+        },
+        {
+          "title": "Introduce Arctic easing + timing tokens and apply to scroll",
+          "area": "src/index.css :root (lines 39-40) and src/components/row.tsx glideTo() (lines 329-351)",
+          "whatToDo": "Add --ease-quad, --ease-sine-inout, --ease-back-out tokens. Clamp focus-driven glides to 300-400ms (Arctic scrolltime) rather than the current 280-620ms range so remote travel is uniform; leave drag/fling durations as they are. Use --ease-quad for focus scroll.",
+          "mirrors": "Arctic scrolltime 400ms quadratic tween on all list containers (List_Core line 796)"
+        },
+        {
+          "title": "Per-page default focus + focus memory on back",
+          "area": "src/lib/spatial-nav.ts (new exported helpers) + view/router mount points (src/lib/view.tsx, page components)",
+          "whatToDo": "Add focusDefault(pageEl) that focuses the element marked data-harbor-default (fallback: first candidate) on route mount when isKeyboardNavigating(). Add a WeakMap/sessionStorage keyed by route that records document.activeElement's stable id (data-focus-id) on unmount, and restore it on return before falling back to default. This is the biggest missing Arctic behavior — Harbor currently only lands the sidebar on the active tab (lines 154-163) but has no page-level default or restore.",
+          "mirrors": "Arctic <defaultcontrol always='false'> initial focus + Container(601).ListItem focus restoration on hub return"
+        },
+        {
+          "title": "Optional wrap navigation for carousels/spotlight",
+          "area": "src/lib/spatial-nav.ts (pick()/move()) + carousel containers (hero-carousel.tsx, spotlight rows)",
+          "whatToDo": "Support a data-nav-wrap attribute on a scroller: when pick() returns null for left/right and the active element is inside a [data-nav-wrap] container, wrap to the first/last focusable in that same container (circular index). Default stays hard-stop (no wrap) to preserve current row behavior; opt-in only for spotlight/hero carousels.",
+          "mirrors": "Arctic spotlight wraplist (ID 301) using Control.Move(301,-1/1) for circular navigation"
+        },
+        {
+          "title": "Boundary bump feedback",
+          "area": "src/lib/spatial-nav.ts (move(), the no-best branch) + src/index.css (@keyframes harbor-bump-x/-y)",
+          "whatToDo": "When pick() finds no target and it is a genuine hard stop (left/right end of row, or top/bottom with nothing to scroll), add a one-shot bump class to the active element (±8px, ~240ms, var(--ease-sine-inout)) and remove on animationend. Gives the Arctic tactile confirmation that you hit an edge instead of silent nothing.",
+          "mirrors": "Arctic Animation_Group_Bumper: 60ms slide + 180ms return, ±20px sine"
+        },
+        {
+          "title": "Make search fully remote-drivable WITHOUT visual changes",
+          "area": "src/components/search/search-overlay.tsx + onscreen-keyboard.tsx (nav wiring only)",
+          "whatToDo": "Do not touch layout/classes. Verify spatial-nav flow: input (autofocused at 30ms, line 43) -> Down enters OnscreenKeyboard -> Down from keyboard enters results -> results center-scroll via task 1. Ensure Escape closes the overlay and Backspace does not get hijacked while typing (spatial-nav already guards typing, lines 189-208). The overlay already has role='dialog' aria-modal='true' (line 125) so focus is trapped. Keep the existing keydown focus-to-first-focusable fallback (lines 147-157).",
+          "mirrors": "Arctic 4-layer search focus flow: input(3000) -> keyboard(301) -> results(601/602) -> filter switcher(600)"
+        },
+        {
+          "title": "Detail/info dialog focus zones (larger, do last)",
+          "area": "src/components/context-menu.tsx (big panel) and any detail/info view",
+          "whatToDo": "Model the action row and the metadata/widgets area as distinct focus zones. On entering the widgets zone, optionally dim/scale the header area (Arctic zoom 100%->85% + fade over 300ms) using a state class + var(--ease-sine-inout); keep it subtle to preserve Harbor's look. Ensure Down from the primary action row enters widget rows and Up returns. Context-menu already has deferred first-item focus (setTimeout to [data-cm-first], lines 168-169) and Escape close (line 159) — reuse that pattern.",
+          "mirrors": "Arctic DialogVideoInfo widget-focus zoom-out (main content 100->85%, widgets slide up 880px) and action grouplist routing"
+        }
+      ],
+      "openQuestions": [
+        "Center-focus vs edge-focus: Arctic centers the focused card (focusposition=2). This is a noticeable feel change from Harbor's current edge parking. Do you want full centering, or a softer 'keep 1-2 cards of lead-in' offset so the row start doesn't jump on the first card?",
+        "Wrap navigation scope: should hero/spotlight carousels wrap (circular) like Arctic's wraplist, or stay hard-stop like every other row for consistency? I lean opt-in wrap only for the hero.",
+        "Focus memory persistence: restore last-focused item within a session only (in-memory WeakMap), or persist across app restarts (sessionStorage/DB)? Arctic keeps it per-session via window properties.",
+        "Bounce intensity: Arctic's 96.5%->100% is subtle. On Harbor's already-lifting cards, do you want the scale bounce on top of the lift, or the lift alone with just the ring? I can ship it subtle and you tune.",
+        "Detail/info zoom-out (task 8) is the heaviest and most 'Arctic-looking' change. Confirm you want the header dim-and-shrink when focus enters the widgets area, or keep the detail view static to stay closer to Harbor's current look."
+      ]
+    }
+  }
+}
